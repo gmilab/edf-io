@@ -35,7 +35,7 @@ function [ edfdata ] = edf_getalldata( EDF_PATH, varargin )
     %% Load file
 
     edffile = edf_fopen(EDF_PATH);
-    edfdata.data = edf_fread(edffile, 0, edffile.total_duration);
+    edfdata = edf_fread(edffile, 0, edffile.total_duration);
     edf_fclose(edffile);
 
     edfdata.num_samples = edffile.number_of_samples(1);
