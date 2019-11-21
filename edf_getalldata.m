@@ -9,6 +9,9 @@ function [ edfdata ] = edf_getalldata( EDF_PATH, varargin )
 %   notchharms -    integer    (Default: 4)
 %                   number of frequency multiples of the line noise frequency should be subtracted.
 %                   By default, this would filter at 60, 120, 180, 240, 300Hz.
+%   channels -  vector of integers (Default: all channels with the most
+%               common sampling rate)
+%               list of channels to import
 %
 % Returns
 %   edfdata.data - EEG recording. (time x channels)
@@ -29,30 +32,40 @@ function [ edfdata ] = edf_getalldata( EDF_PATH, varargin )
     notch_valfn = @(x) assert(isnumeric(x) || strcmp('off', x), 'Parameter "notch" must be numeric or "off"');
     addParameter(p, 'notch', 60, notch_valfn);
     addParameter(p, 'notchharms', 4, @isnumeric);
+    addParameter(p, 'channels', []);
     
     parse(p, varargin{:});
     
     %% Load file
 
     edffile = edf_fopen(EDF_PATH);
-    edfdata = edf_fread(edffile, 0, edffile.total_duration);
+    
+    if isempty(p.Results.channels)
+      % find most common sampling rate: these are probably physiologic
+      % channels. everything else is annotations / pleth / etc..
+      chsel = find(edffile.sampling_rate == mode(edffile.sampling_rate));
+    else
+      chsel = p.Results.channels;
+    end
+    
+    edfdata = edf_fread(edffile, 0, edffile.total_duration, 'channels', chsel);
     edf_fclose(edffile);
 
-    edfdata.num_samples = edffile.number_of_samples(1);
-    edfdata.num_channels = length(edffile.number_of_samples);
+    edfdata.num_samples = edffile.number_of_samples(chsel(1));
+    edfdata.num_channels = length(chsel);
 
-    edfdata.ch_label = cellstr(edffile.header.label);
+    edfdata.ch_label = cellstr(edffile.header.label(chsel,:));
 
     % ** Sanity Check **
     % If sampling rates are different for different channels
-    if max(edffile.sampling_rate) ~= min(edffile.sampling_rate)
+    if max(edffile.sampling_rate(chsel)) ~= min(edffile.sampling_rate(chsel))
         error('Inconsistent sampling rate!');
     else
-        edfdata.srate = edffile.sampling_rate(1);
+        edfdata.srate = edffile.sampling_rate(chsel(1));
     end
 
     % If number of samples are different for different channels
-    if max(edffile.number_of_samples) ~= min(edffile.number_of_samples)
+    if max(edffile.number_of_samples(chsel)) ~= min(edffile.number_of_samples(chsel))
         error('Inconsistent data length!');
     end
     

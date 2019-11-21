@@ -2,11 +2,12 @@ function edf_data = edf_fread(edf_file, start_time, duration, varargin)
 % EDF_FREAD  read data from an EDF+ file
 %
 % edf_fread(edf_file, start_time, duration)
-% 
+%
 % Arguments:
 %     edf_file: structure for an EDF+ file (from edf_fopen)
 %     start_time: starting from 0 second
 %     duration: in seconds
+%     channels: vector of channel indices
 %
 % Outputs:
 %     .data(n_timepoints, n_ch): read data
@@ -25,64 +26,65 @@ addOptional(p, 'start_time', 0);
 addOptional(p, 'duration', edf_file.total_duration);
 addParameter(p, 'conversion', true, @islogical);
 addParameter(p, 'annotations', false, @islogical);
+addParameter(p, 'channels', 1:size(edf_file.number_of_samples,1));
 parse(p, start_time, duration, varargin{:});
 
 if p.Results.start_time < 0
-    error('Start time must be >= 0');
+  error('Start time must be >= 0');
 end
 
 if p.Results.duration < 1
-    error('Duration must be >= 1');
+  error('Duration must be >= 1');
 end
 
 %% Do stuff
-start_point = round(edf_file.sampling_rate * p.Results.start_time);
-end_point = start_point + round(edf_file.sampling_rate * p.Results.duration) - 1;
+start_point = round(edf_file.sampling_rate(p.Results.channels) * p.Results.start_time);
+end_point = start_point + round(edf_file.sampling_rate(p.Results.channels) * p.Results.duration) - 1;
 
-ch_max_sampling_rate = find(edf_file.sampling_rate == max(edf_file.sampling_rate));
-ch_max_sampling_rate = ch_max_sampling_rate(1);
+[~,ch_max_sampling_rate] = max(edf_file.sampling_rate(p.Results.channels));
 
 start_record_number = floor(start_point(ch_max_sampling_rate) ...
-    / edf_file.header.number_of_samples_in_each_data_record(ch_max_sampling_rate)) + 1;
+  / edf_file.header.number_of_samples_in_each_data_record(p.Results.channels(ch_max_sampling_rate))) + 1;
 end_record_number = floor(end_point(ch_max_sampling_rate) ...
-    / edf_file.header.number_of_samples_in_each_data_record(ch_max_sampling_rate)) + 1;
+  / edf_file.header.number_of_samples_in_each_data_record(p.Results.channels(ch_max_sampling_rate))) + 1;
 
-start_offset = mod(start_point, edf_file.header.number_of_samples_in_each_data_record(ch_max_sampling_rate));
-end_offset = mod(end_point, edf_file.header.number_of_samples_in_each_data_record(ch_max_sampling_rate));
+start_offset = mod(start_point, edf_file.header.number_of_samples_in_each_data_record(p.Results.channels(ch_max_sampling_rate)));
+end_offset = mod(end_point, edf_file.header.number_of_samples_in_each_data_record(p.Results.channels(ch_max_sampling_rate)));
 
 if end_record_number > edf_file.header.number_of_data_records
-    end_record_number = edf_file.header.number_of_data_records;
-    end_offset = edf_file.header.number_of_samples_in_each_data_record - 1;
+  end_record_number = edf_file.header.number_of_data_records;
+  end_offset = edf_file.header.number_of_samples_in_each_data_record - 1;
 end
 
 data_record = edf_fread_record(edf_file, start_record_number, end_record_number - start_record_number + 1, 'conversion', false);
 
-for ch = edf_file.header.number_of_signals_in_data_record:-1:1
-    start = start_offset(ch) + 1;
-    finish = (end_record_number - start_record_number) * ...
-        edf_file.header.number_of_samples_in_each_data_record(ch) + end_offset(ch) + 1;
-    edf_data.data(:, ch) = data_record(start:finish, ch);
-    
+for chidx = length(p.Results.channels):-1:1
+  ch = p.Results.channels(chidx);
+  start = start_offset(ch) + 1;
+  finish = (end_record_number - start_record_number) * ...
+    edf_file.header.number_of_samples_in_each_data_record(ch) + end_offset(ch) + 1;
+  edf_data.data(:, chidx) = data_record(start:finish, ch);
 end
 
 if p.Results.annotations
-    ann_ch = find(strcmp(cellstr(edf_file.header.label), 'EDF Annotations'));
-    for ch = ann_ch
-        
-    end
+  ann_ch = find(strcmp(cellstr(edf_file.header.label), 'EDF Annotations'));
+  for ch = ann_ch
+    edf_data.annotations = {};
+  end
 end
 
 % Convert from raw integer values to actual values
 if p.Results.conversion
-    for ch = 1:edf_file.header.number_of_signals_in_data_record
-        edf_data.data(:,ch) = (edf_data.data(:,ch) - edf_file.header.digital_minimum(ch)) * ...
-            (edf_file.header.physical_maximum(ch) - edf_file.header.physical_minimum(ch)) / ...
-            (edf_file.header.digital_maximum(ch) - edf_file.header.digital_minimum(ch))...
-            + edf_file.header.physical_minimum(ch);
-    end
+  for chidx = 1:length(p.Results.channels)
+    ch = p.Results.channels(chidx);
+    edf_data.data(:,chidx) = (edf_data.data(:,chidx) - edf_file.header.digital_minimum(ch)) * ...
+      (edf_file.header.physical_maximum(ch) - edf_file.header.physical_minimum(ch)) / ...
+      (edf_file.header.digital_maximum(ch) - edf_file.header.digital_minimum(ch))...
+      + edf_file.header.physical_minimum(ch);
+  end
 end
 
 
 if size(edf_data.data, 1) ~= edf_file.sampling_rate * p.Results.duration
-    edf_data.data((end + 1):edf_file.sampling_rate * p.Results.duration, :) = 0;
+  edf_data.data((end + 1):edf_file.sampling_rate * p.Results.duration, :) = 0;
 end
