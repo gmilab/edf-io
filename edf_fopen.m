@@ -21,16 +21,17 @@ edf_file.header.duration_of_a_data_record_in_seconds = str2num(char(fread(fid, 8
 edf_file.header.number_of_signals_in_data_record = str2num(char(fread(fid, 4, 'char')'));
 
 ns = edf_file.header.number_of_signals_in_data_record;
-edf_file.header.label = char(fread(fid, [16 ns], 'char')');
-edf_file.header.transducer_type = char(fread(fid, [80 ns], 'char')');
-edf_file.header.physical_dimension = char(fread(fid, [8 ns], 'char')');
+edf_file.header.label = cellstr(char(fread(fid, [16 ns], 'char')'));
+edf_file.header.transducer_type = cellstr(char(fread(fid, [80 ns], 'char')'));
+edf_file.header.physical_dimension = cellstr(char(fread(fid, [8 ns], 'char')'));
 edf_file.header.physical_minimum = str2num(char(fread(fid, [8 ns], 'char')'));
 edf_file.header.physical_maximum = str2num(char(fread(fid, [8 ns], 'char')'));
 edf_file.header.digital_minimum = str2num(char(fread(fid, [8 ns], 'char')'));
 edf_file.header.digital_maximum = str2num(char(fread(fid, [8 ns], 'char')'));
-edf_file.header.prefiltering = char(fread(fid, [80 ns], 'char')');
+edf_file.header.prefiltering = cellstr(char(fread(fid, [80 ns], 'char')'));
 edf_file.header.number_of_samples_in_each_data_record = str2num(char(fread(fid, [8 ns], 'char')'));
 edf_file.header.reserved2 = char(fread(fid, [32 ns], 'char')');
+
 
 edf_file.sampling_rate = edf_file.header.number_of_samples_in_each_data_record / ...
     edf_file.header.duration_of_a_data_record_in_seconds;
